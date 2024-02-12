@@ -29,9 +29,25 @@ async function run() {
 
 
     const menuCollection = client.db('bistroDB').collection('menu')
+    const userCollection = client.db('bistroDB').collection('users')
     const reviewCollection = client.db('bistroDB').collection('review')
     const cartsCollection = client.db('bistroDB').collection('cart')
 
+    //user Info
+    app.post('/users', async (req, res) => {
+      const user = req.body
+      console.log(user);
+
+      // can login if email doesn't exist on the database with using (email unique, upsert, simple checking)
+      const query = { email : user.email}
+      const existingUser = await userCollection.findOne(query)
+      if(existingUser){
+       return res.send({message: "User already exists", insertedId : null})
+      }
+
+      const result = await userCollection.insertOne(user)
+      res.send(result)
+    })
 
     // menu 
     app.get('/menu', async (req, res) => {
