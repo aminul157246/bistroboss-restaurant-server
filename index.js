@@ -3,6 +3,7 @@ const cors = require('cors')
 const jwt = require('jsonwebtoken');
 const app = express()
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
+const e = require('express');
 require('dotenv').config()
 const port = process.env.PORT || 3000
 
@@ -43,30 +44,65 @@ async function run() {
 
     })
 
+
+
     // verify token 
     const verifyToken = (req, res, next) => {
-      console.log(' i am verify token', req.headers.authorization);
+      // console.log(' i am verify token', req.headers.authorization);
 
 
-      if(!req.headers.authorization){
-        res.status(401).send({message : 'forbidden access'})
+      if (!req.headers.authorization) {
+        res.status(401).send({ message: 'forbidden access' })
       }
 
       const token = req.headers.authorization.split(" ")[1]
-      
+
       jwt.verify(token, process.env.ACCESS_TOKEN, (err, decode) => {
-        if(err){
-          res.status(401).send({message : 'forbidden access'})
+        if (err) {
+          res.status(401).send({ message: 'forbidden access' })
         }
         req.decode = decode;
         next()
       })
     }
 
+    // verify admin 
+    const verifyAdmin = async (req, res, next) => {
+      const email = req.decode.email;
+      const query = { email: email }
+      const user = await userCollection.findOne(query)
+      const isAdmin = user?.role === 'admin'
+      if (!isAdmin) {
+        return res.status(403).send({ message: 'forbidden access' })
+      }
+      next()
+
+    }
+
     //user Info
-    app.get('/users', verifyToken, async (req, res) => {
+    app.get('/users', verifyToken, verifyAdmin, async (req, res) => {
       const result = await userCollection.find().toArray()
       res.send(result)
+    })
+
+
+    // check isAdmin -----------------
+    app.get('/users/admin/:email', verifyToken, async (req, res) => {
+      const email = req.params.email;
+      if (email !== req.decode.email) {
+        return res.status(403).send({ message: 'unauthorized access' })
+      }
+
+      else {
+        const query = { email: email }
+        const user = await userCollection.findOne(query)
+        let admin = false;
+        if (user) {
+          admin = user?.role === 'admin'
+        }
+        res.send({ admin })
+      }
+
     })
 
 
@@ -86,7 +122,7 @@ async function run() {
     })
 
     // user role 
-    app.patch('/users/admin/:id', async (req, res) => {
+    app.patch('/users/admin/:id', verifyToken, verifyAdmin, async (req, res) => {
       const id = req.params.id;
       const filter = { _id: new ObjectId(id) }
       const updateDoc = {
@@ -99,7 +135,7 @@ async function run() {
     })
 
 
-    app.delete('/users/:id', async (req, res) => {
+    app.delete('/users/:id', verifyToken, verifyAdmin, async (req, res) => {
       const id = req.params.id
       const query = { _id: new ObjectId(id) }
       const result = await userCollection.deleteOne(query)
@@ -109,8 +145,48 @@ async function run() {
 
 
     // menu 
-    app.get('/menu', async (req, res) => {
+    app.get('/menus', async (req, res) => {
       const result = await menuCollection.find().toArray()
+      res.send(result)
+    })
+
+    app.get('menus/:id', async (req, res) => {
+      const id = req.params.id
+      const query = { _id: new ObjectId(id) }
+      const result = await menuCollection.findOne(query)
+      res.send(result)
+    })
+
+    app.post('/menus', verifyToken, verifyAdmin, async (req, res) => {
+      const menu = req.body
+      const result = await menuCollection.insertOne(menu)
+      res.send(result)
+    })
+
+    app.patch('/menus/:id', async (req, res) => {
+      const item = req.body;
+      const id = req.params.id
+      const query = { _id: new ObjectId(id) }
+      const updateDoc = {
+        $set: {
+          name: item.name,
+          category: item.category,
+          price: item.price,
+          recipe: item.recipe,
+          image: item.image,
+        }
+      }
+
+      const result = await menuCollection.updateOne(query, updateDoc)
+      res.send(result)
+    })
+
+
+    app.delete('/menus/:id', async (req, res) => {
+      const id = req.params.id
+      console.log(id);
+      const query = { _id: new ObjectId(id) }
+      const result = await menuCollection.deleteOne(query)
       res.send(result)
     })
 
